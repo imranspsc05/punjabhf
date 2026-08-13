@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Punjab Health Facilities - Directions</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Arial}
+.header{height:58px;background:#17365d;color:#fff;padding:17px;font-size:19px;font-weight:bold}
+.app{height:calc(100vh - 58px);display:flex}.side{width:390px;background:#fff;padding:14px;overflow:auto;box-shadow:2px 0 8px #999;z-index:1000}#map{flex:1}
+.section{border-bottom:1px solid #ddd;padding-bottom:13px;margin-bottom:13px}
+h3{margin:3px 0 10px;color:#17365d;font-size:17px}
+label{display:block;font-size:12px;font-weight:bold;margin:7px 0 4px}
+input,select,button{width:100%;padding:9px;border:1px solid #bbb;border-radius:5px;font-size:13px}
+button{background:#17365d;color:#fff;border:0;margin-top:7px;cursor:pointer}
+.green{background:#198754}.blue{background:#2878b5}.red{background:#c0392b}
+.status{background:#eef3f8;border-radius:5px;padding:9px;font-size:12px;line-height:1.5}
+.facility{padding:9px;border:1px solid #ddd;border-radius:5px;margin-top:6px;cursor:pointer}
+.facility:hover{background:#eaf2fb;border-color:#2878b5}
+.name{font-weight:bold;color:#17365d}.meta{font-size:11px;color:#666;margin-top:3px}
+.route{background:#eaf7ee;border-left:4px solid #198754;padding:10px;margin-top:8px;font-size:12px;line-height:1.6}
+.instructions{max-height:250px;overflow:auto}.instruction{padding:7px;border-bottom:1px solid #ddd;font-size:11px}
+@media(max-width:800px){.side{position:absolute;width:340px;height:calc(100vh - 58px)}}
+</style>
+</head>
+<body>
+<div class="header">🏥 Punjab Health Facilities — Directions</div>
+<div class="app">
+<div class="side">
+
+<div class="section">
+<h3>1. Load Facility GeoJSON</h3>
+<input type="file" id="file" accept=".geojson,.json">
+<div class="status" style="margin-top:7px">
+Fields supported: <b>FullName, Latitude, Longitude, DistrictNa, TehsilName, HFTypeName, CATEGORY</b>
+</div>
+</div>
+
+<div class="section">
+<h3>2. Where are you starting from?</h3>
+<label>Direction From</label>
+<select id="originMode" onchange="changeOriginMode()">
+<option value="">-- Select starting point --</option>
+<option value="current">📍 Current Location</option>
+<option value="map">🗺️ Select Location From Map</option>
+</select>
+
+<div id="originStatus" class="status" style="margin-top:8px">
+Choose <b>Current Location</b> or <b>Select Location From Map</b>.
+</div>
+
+<div id="gpsBox" style="display:none">
+<button class="green" onclick="getLocation()">📍 Get My Current Location</button>
+</div>
+
+<div id="mapBox" style="display:none">
+<button class="blue" onclick="startMapSelection()">🗺️ Click Here, Then Click the Map</button>
+</div>
+</div>
+
+<div class="section">
+<h3>3. Filter Facilities</h3>
+<label>Category</label><select id="cat" onchange="filters()"><option value="">All Categories</option></select>
+<label>Facility Type</label><select id="type" onchange="filters()"><option value="">All Facility Types</option></select>
+<label>District</label><select id="district" onchange="tehsils();filters()"><option value="">All Districts</option></select>
+<label>Tehsil</label><select id="tehsil" onchange="filters()"><option value="">All Tehsils</option></select>
+<label>Search</label><input id="search" placeholder="Search FullName..." oninput="filters()">
+<div id="count" class="status" style="margin-top:8px">No facilities loaded.</div>
+</div>
+
+<div class="section">
+<h3>4. Select Destination Facility</h3>
+<div id="list"></div>
+</div>
+
+<div class="section">
+<h3>5. Directions</h3>
+<div id="selected" class="status">Select a facility.</div>
+<button class="green" onclick="route()">🚗 Get Driving Directions</button>
+<button class="red" onclick="clearRoute()">Clear Route</button>
+<div id="routeInfo"></div>
+</div>
+
+</div>
+<div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map=L.map('map').setView([31.52,74.36],7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+
+let all=[],shown=[],markers=[],layer=L.layerGroup().addTo(map);
+let origin=null,originMarker=null,destination=null,routeLayer=null,mapPicking=false;
+
+document.getElementById('file').onchange=e=>{
+ const f=e.target.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=x=>{try{load(JSON.parse(x.target.result))}catch(e){alert('Invalid GeoJSON.')}};
+ r.readAsText(f);
+};
+
+function p(f,k){return (f.properties||{})[k]??''}
+function name(f){return p(f,'FullName')||p(f,'name')||'Unnamed Facility'}
+
+function load(g){
+ if(!g.features){alert('GeoJSON must contain features.');return}
+ all=g.features.filter(f=>f.geometry&&f.geometry.type==='Point'&&f.geometry.coordinates);
+ fill('cat',vals('CATEGORY'),'All Categories');
+ fill('type',vals('HFTypeName'),'All Facility Types');
+ fill('district',vals('DistrictNa'),'All Districts');
+ tehsils();filters();
+}
+
+function vals(k){
+ return [...new Set(all.map(f=>String(p(f,k)).trim()).filter(x=>x&&x!=='NULL'))].sort();
+}
+
+function fill(id,a,first){
+ const s=document.getElementById(id);s.innerHTML='<option value="">'+first+'</option>';
+ a.forEach(x=>{let o=document.createElement('option');o.value=x;o.textContent=x;s.appendChild(o)});
+}
+
+function tehsils(){
+ const d=document.getElementById('district').value;
+ fill('tehsil',[...new Set(all.filter(f=>!d||p(f,'DistrictNa')===d).map(f=>String(p(f,'TehsilName')).trim()).filter(x=>x&&x!=='NULL'))].sort(),'All Tehsils');
+}
+
+function filters(){
+ const c=cat.value,t=type.value,d=district.value,h=tehsil.value,s=search.value.toLowerCase();
+ shown=all.filter(f=>!c||p(f,'CATEGORY')===c)
+ .filter(f=>!t||p(f,'HFTypeName')===t)
+ .filter(f=>!d||p(f,'DistrictNa')===d)
+ .filter(f=>!h||p(f,'TehsilName')===h)
+ .filter(f=>!s||name(f).toLowerCase().includes(s));
+ draw();list();
+ count.innerHTML='<b>'+shown.length+'</b> of '+all.length+' facilities shown.';
+}
+
+function draw(){
+ layer.clearLayers();markers=[];
+ shown.forEach((f,i)=>{
+  let c=f.geometry.coordinates;
+  let m=L.marker([+c[1],+c[0]]).addTo(layer);
+  m.bindPopup('<b>'+esc(name(f))+'</b><br>'+esc(p(f,'DistrictNa'))+' / '+esc(p(f,'TehsilName'))+
+  '<br><button onclick="selectDest('+i+')">Select Destination</button>');
+  m.on('click',()=>selectDest(i));markers.push(m);
+ });
+ if(markers.length){let g=L.featureGroup(markers);if(g.getBounds().isValid())map.fitBounds(g.getBounds(),{padding:[30,30]})}
+}
+
+function list(){
+ const b=document.getElementById('list');b.innerHTML='';
+ shown.slice(0,150).forEach((f,i)=>{
+  let x=document.createElement('div');x.className='facility';
+  x.innerHTML='<div class="name">'+esc(name(f))+'</div><div class="meta">'+
+  esc(p(f,'CATEGORY'))+' · '+esc(p(f,'HFTypeName'))+'<br>'+
+  esc(p(f,'DistrictNa'))+' · '+esc(p(f,'TehsilName'))+'</div>';
+  x.onclick=()=>selectDest(i);b.appendChild(x);
+ });
+}
+
+function selectDest(i){
+ destination=shown[i];let c=destination.geometry.coordinates;
+ selected.innerHTML='<b>'+esc(name(destination))+'</b><br>'+
+ 'Category: '+esc(p(destination,'CATEGORY'))+'<br>'+
+ 'Type: '+esc(p(destination,'HFTypeName'))+'<br>'+
+ esc(p(destination,'DistrictNa'))+' · '+esc(p(destination,'TehsilName'))+
+ '<br>Lat: '+(+c[1]).toFixed(6)+' | Lon: '+(+c[0]).toFixed(6);
+ map.setView([+c[1],+c[0]],14);markers[i]?.openPopup();
+}
+
+function changeOriginMode(){
+ const mode=originMode.value;
+ gpsBox.style.display=mode==='current'?'block':'none';
+ mapBox.style.display=mode==='map'?'block':'none';
+ mapPicking=false;
+ map.getContainer().style.cursor='';
+ if(mode==='current'){originStatus.innerHTML='Click <b>Get My Current Location</b> to use your GPS position.'}
+ else if(mode==='map'){originStatus.innerHTML='Click <b>Click Here, Then Click the Map</b> to choose the starting point.'}
+ else originStatus.innerHTML='Choose <b>Current Location</b> or <b>Select Location From Map</b>.';
+}
+
+function getLocation(){
+ if(!navigator.geolocation){originStatus.textContent='Geolocation is not supported.';return}
+ originStatus.textContent='Detecting current location...';
+ navigator.geolocation.getCurrentPosition(pos=>{
+  origin={lat:pos.coords.latitude,lng:pos.coords.longitude};
+  setOriginMarker(origin,'Your Current Location');
+  originStatus.innerHTML='<b>Starting point: Current Location</b><br>Lat: '+origin.lat.toFixed(6)+'<br>Lon: '+origin.lng.toFixed(6);
+ },e=>{originStatus.textContent='Unable to get location. Please allow browser location access.'},
+ {enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+
+function startMapSelection(){
+ mapPicking=true;map.getContainer().style.cursor='crosshair';
+ originStatus.innerHTML='<b>Map selection active.</b><br>Click anywhere on the map to set your starting point.';
+}
+
+map.on('click',e=>{
+ if(!mapPicking)return;
+ mapPicking=false;map.getContainer().style.cursor='';
+ origin={lat:e.latlng.lat,lng:e.latlng.lng};
+ originMode.value='map';
+ setOriginMarker(origin,'Selected Starting Point');
+ originStatus.innerHTML='<b>Starting point selected from map</b><br>Lat: '+origin.lat.toFixed(6)+'<br>Lon: '+origin.lng.toFixed(6);
+});
+
+function setOriginMarker(o,title){
+ if(originMarker)map.removeLayer(originMarker);
+ originMarker=L.marker([o.lat,o.lng]).addTo(map).bindPopup('<b>'+title+'</b>').openPopup();
+}
+
+async function route(){
+ if(!origin){alert('Please choose a direction starting point first.');return}
+ if(!destination){alert('Please select a destination facility.');return}
+ const c=destination.geometry.coordinates;
+ routeInfo.innerHTML='<div class="status">Calculating driving route...</div>';
+ const url='https://router.project-osrm.org/route/v1/driving/'+origin.lng+','+origin.lat+';'+c[0]+','+c[1]+'?overview=full&geometries=geojson&steps=true';
+ try{
+  const r=await fetch(url),d=await r.json();
+  if(d.code!=='Ok'||!d.routes.length)throw Error('No driving route found.');
+  let q=d.routes[0];
+  if(routeLayer)map.removeLayer(routeLayer);
+  routeLayer=L.geoJSON(q.geometry,{style:{weight:6,opacity:.85}}).addTo(map);
+  map.fitBounds(routeLayer.getBounds(),{padding:[40,40]});
+  let km=(q.distance/1000).toFixed(2),min=Math.round(q.duration/60);
+  let h='<div class="route"><b>Route Summary</b><br>🚗 Distance: <b>'+km+' km</b><br>⏱ Time: <b>'+dur(min)+'</b></div><div class="instructions"><b>Turn-by-turn Directions</b>';
+  let n=1;q.legs.forEach(l=>l.steps.forEach(st=>{
+   h+='<div class="instruction"><b>'+n+'.</b> '+esc(st.maneuver.instruction||fallback(st))+'<br><small>'+((st.distance)/1000).toFixed(2)+' km</small></div>';n++;
+  }));
+  routeInfo.innerHTML=h+'</div>';
+ }catch(e){routeInfo.innerHTML='<div class="status">'+esc(e.message)+'</div>'}
+}
+
+function fallback(s){
+ let t=s.maneuver.type,m=s.maneuver.modifier||'';
+ if(t==='depart')return'Start your journey';if(t==='arrive')return'You have arrived';
+ if(t==='turn')return'Turn '+m;if(t==='continue')return'Continue '+m;
+ return'Continue on the route';
+}
+function dur(m){return Math.floor(m/60)?Math.floor(m/60)+' hr '+m%60+' min':m+' min'}
+function clearRoute(){if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}routeInfo.innerHTML=''}
+function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
+</script>
+</body>
+</html>
