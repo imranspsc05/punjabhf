@@ -54,6 +54,35 @@ button{cursor:pointer}
 }
 .search:focus{border-color:var(--brand2);box-shadow:0 0 0 3px rgba(15,119,120,.10)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.multi-select{position:relative;min-width:0}
+.multi-select-btn{
+  width:100%;height:38px;padding:0 11px;border:1px solid var(--border);border-radius:9px;
+  background:#fff;color:var(--text);display:flex;align-items:center;justify-content:space-between;
+  font:inherit;font-size:11px;cursor:pointer;text-align:left
+}
+.multi-select-btn:hover{border-color:#9bc9c6}
+.multi-select.open .multi-select-btn{border-color:var(--brand);box-shadow:0 0 0 2px rgba(11,105,105,.08)}
+.multi-menu{
+  display:none;position:absolute;z-index:2000;top:43px;left:0;right:0;max-height:290px;
+  overflow:auto;background:#fff;border:1px solid #d9e4e4;border-radius:10px;
+  box-shadow:0 10px 28px rgba(0,0,0,.15);padding:6px
+}
+.multi-select.open .multi-menu{display:block}
+.multi-actions{display:flex;gap:6px;padding:5px;border-bottom:1px solid #edf1f1;margin-bottom:4px}
+.multi-actions button{
+  flex:1;border:1px solid #d9e4e4;background:#f7f9f9;border-radius:7px;padding:6px;
+  font-size:10px;cursor:pointer;color:var(--text)
+}
+.district-option{
+  display:flex;align-items:center;gap:8px;padding:8px 7px;border-radius:7px;
+  font-size:11px;cursor:pointer
+}
+.district-option:hover{background:#f3f8f8}
+.district-option input{accent-color:var(--brand)}
+@media(max-width:850px){
+  .multi-menu{max-height:45vh}
+}
+
 select{
   width:100%;padding:10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--text)
 }
@@ -68,6 +97,8 @@ select{
 }
 .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 .btn.primary:hover{background:var(--brand2)}
+.google-btn{background:#fff;border:1px solid #c8d8d8;color:#174f53}
+.google-btn:hover{background:#f2f7f7}
 .btn.warn{background:#fff7e8;border-color:#f6d58e;color:#8a5700}
 .btn.danger{color:var(--danger)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -79,6 +110,10 @@ select{
   font-size:11px;font-weight:700;color:var(--muted)
 }
 .mode button.active{background:#e8f5f4;color:var(--brand);border-color:#a7d7d3}
+.start-hint{
+  margin-top:9px;padding:9px 10px;border-radius:9px;background:#f5f9f9;
+  border:1px solid #e1eeee;color:var(--muted);font-size:10px;line-height:1.45
+}
 .plan-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .plan-count{font-size:11px;background:#e7f4f3;color:var(--brand);padding:4px 8px;border-radius:20px;font-weight:800}
 .plan-list{display:flex;flex-direction:column;gap:7px}
@@ -181,7 +216,6 @@ select{
     </div>
     <div class="top-actions">
       <button class="top-btn" id="sidebarBtn">☰ <span>Menu</span></button>
-      <button class="top-btn" id="locBtn">⌖ <span>My Location</span></button>
     </div>
   </header>
 
@@ -192,9 +226,15 @@ select{
           <div class="section-title">Find facilities</div>
           <input id="search" class="search" type="search" placeholder="Search facility, district or tehsil…">
           <div class="grid2">
-            <select id="district"><option value="">All Districts</option></select>
+            <div class="multi-select" id="districtPicker">
+              <button type="button" class="multi-select-btn" id="districtBtn">
+                <span id="districtBtnText">All Districts</span><span>▾</span>
+              </button>
+              <div class="multi-menu" id="districtMenu"></div>
+            </div>
             <select id="tehsil"><option value="">All Tehsils</option></select>
           </div>
+          <select id="district" multiple aria-hidden="true" tabindex="-1" style="display:none"></select>
         </section>
 
         <section class="section">
@@ -207,18 +247,26 @@ select{
         </section>
 
         <section class="section">
-          <div class="section-title">Visit start</div>
-          <div class="mode">
-            <button id="modeLocation" class="active">📍 My Location</button>
-            <button id="modeFirst">1️⃣ First Stop</button>
-            <button id="modeMap">🖱 Map Point</button>
+          <div class="section-title">Visit start location</div>
+          <div class="mode" style="grid-template-columns:1fr 1fr">
+            <button id="modeLocation">📍 Current Location</button>
+            <button id="modeMap" class="active">🖱 Select on Map</button>
+          </div>
+          <div id="startStatus" class="start-hint">
+            Click anywhere on the map to select the <b>Visit Start</b>.
+          </div>
+          <div class="btnrow" style="margin-top:8px">
+            <button class="btn" id="clearStartBtn">Clear Start</button>
           </div>
           <div class="btnrow" style="margin-top:8px">
             <button class="btn primary" id="routeBtn">🧭 Build Route</button>
-            <button class="btn warn" id="optBtn">⚡ Optimize</button>
+            <button class="btn warn" id="optBtn">⚡ Optimize Route</button>
+          </div>
+          <div class="btnrow" style="margin-top:8px">
+            <button class="btn google-btn" id="googleBtn">🗺 Open Google Directions</button>
           </div>
           <div class="footer-note" style="margin-top:7px">
-            Choose facilities from the list or click a map marker. Route planning uses the public OpenStreetMap/OSRM routing service.
+            <b>Optimize Route</b> uses actual driving-road distances to reduce unnecessary travel, then rebuilds the route in the optimized order.
           </div>
         </section>
 
@@ -294,7 +342,7 @@ features.forEach((f,i)=> {
 
 let filtered = [...features];
 let planned = [];
-let startMode = 'location';
+let startMode = 'map';
 let userLocation = null;
 let mapStart = null;
 let startMarker = null;
@@ -321,7 +369,8 @@ const els = {
   mapStatus:document.getElementById('mapStatus'),
   mapSub:document.getElementById('mapSub'),
   routeBadge:document.getElementById('routeBadge'),
-  loading:document.getElementById('loading')
+  loading:document.getElementById('loading'),
+  startStatus:document.getElementById('startStatus')
 };
 
 function p(f,k){ return f.properties?.[k] ?? ''; }
@@ -378,25 +427,120 @@ function refreshMarkerIcons(){
     m.setPopupContent(popupHTML(f));
   });
 }
+let selectedDistricts = new Set();
+
 function populateDistricts(){
-  const vals=[...new Set(features.map(districtOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  els.district.innerHTML='<option value="">All Districts</option>'+vals.map(v=>`<option>${esc(v)}</option>`).join('');
-}
-function populateTehsils(){
-  const d=els.district.value;
-  const vals=[...new Set(features.filter(f=>!d||districtOf(f)===d).map(tehsilOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const current=els.tehsil.value;
-  els.tehsil.innerHTML='<option value="">All Tehsils</option>'+vals.map(v=>`<option>${esc(v)}</option>`).join('');
-  if(vals.includes(current)) els.tehsil.value=current;
-}
-function applyFilters(){
-  const q=els.search.value.trim().toLowerCase(), d=els.district.value, t=els.tehsil.value;
-  filtered=features.filter(f=>{
-    const hay=[nameOf(f),districtOf(f),tehsilOf(f),p(f,'HFTypeName'),p(f,'Category')].join(' ').toLowerCase();
-    return (!q||hay.includes(q)) && (!d||districtOf(f)===d) && (!t||tehsilOf(f)===t);
+  const vals=[...new Set(features.map(districtOf).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
+
+  // Keep hidden select synchronized.
+  els.district.innerHTML=vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  [...els.district.options].forEach(o=>o.selected=selectedDistricts.has(o.value));
+
+  const menu=document.getElementById('districtMenu');
+  menu.innerHTML=`
+    <div class="multi-actions">
+      <button type="button" id="districtAllBtn">All</button>
+      <button type="button" id="districtClearBtn">Clear</button>
+    </div>
+    ${vals.map(v=>`
+      <label class="district-option">
+        <input type="checkbox" value="${esc(v)}" ${selectedDistricts.has(v)?'checked':''}>
+        <span>${esc(v)}</span>
+      </label>`).join('')}
+  `;
+
+  menu.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.addEventListener('change',()=>{
+      if(cb.checked) selectedDistricts.add(cb.value);
+      else selectedDistricts.delete(cb.value);
+      syncDistrictFilter();
+      populateTehsils();
+      applyFilters();
+    });
   });
-  renderFacilities(); rebuildMarkers();
+
+  document.getElementById('districtAllBtn').onclick=()=>{
+    selectedDistricts.clear();
+    syncDistrictFilter();
+    populateTehsils();
+    applyFilters();
+  };
+
+  document.getElementById('districtClearBtn').onclick=()=>{
+    selectedDistricts.clear();
+    syncDistrictFilter();
+    populateTehsils();
+    applyFilters();
+  };
+
+  updateDistrictButton();
+}
+
+function syncDistrictFilter(){
+  [...els.district.options].forEach(o=>o.selected=selectedDistricts.has(o.value));
+  updateDistrictButton();
+}
+
+function updateDistrictButton(){
+  const text=document.getElementById('districtBtnText');
+  if(!selectedDistricts.size){
+    text.textContent='All Districts';
+  }else if(selectedDistricts.size===1){
+    text.textContent=[...selectedDistricts][0];
+  }else{
+    text.textContent=`${selectedDistricts.size} Districts Selected`;
+  }
+
+  const menu=document.getElementById('districtMenu');
+  if(menu){
+    menu.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+      cb.checked=selectedDistricts.has(cb.value);
+    });
+  }
+}
+
+function populateTehsils(){
+  const districts=[...selectedDistricts];
+  const vals=[...new Set(
+    features
+      .filter(f=>!districts.length || districts.includes(districtOf(f)))
+      .map(tehsilOf)
+      .filter(Boolean)
+  )].sort((a,b)=>a.localeCompare(b));
+
+  const current=els.tehsil.value;
+  els.tehsil.innerHTML='<option value="">All Tehsils</option>'+
+    vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+
+  if(vals.includes(current)) els.tehsil.value=current;
+  else els.tehsil.value='';
+}
+
+function applyFilters(){
+  const q=els.search.value.trim().toLowerCase();
+  const districts=[...selectedDistricts];
+  const t=els.tehsil.value;
+
+  filtered=features.filter(f=>{
+    const hay=[nameOf(f),districtOf(f),tehsilOf(f),p(f,'HFTypeName'),p(f,'Category')]
+      .join(' ').toLowerCase();
+
+    const districtOK=!districts.length || districts.includes(districtOf(f));
+    const tehsilOK=!t || tehsilOf(f)===t;
+
+    return (!q||hay.includes(q)) && districtOK && tehsilOK;
+  });
+
+  renderFacilities();
+  rebuildMarkers();
   els.visibleTotal.textContent=filtered.length;
+
+  if(districts.length){
+    const n=districts.length;
+    els.mapStatus.textContent=`${n} district${n===1?'':'s'} selected`;
+    els.mapSub.textContent=`${filtered.length} facilities match the selected districts.`;
+  }
 }
 function renderFacilities(){
   const shown=filtered.slice(0,150);
@@ -470,40 +614,154 @@ function fitPlan(){
 }
 function setMode(mode){
   startMode=mode;
-  ['modeLocation','modeFirst','modeMap'].forEach(id=>document.getElementById(id).classList.remove('active'));
-  document.getElementById(mode==='location'?'modeLocation':mode==='first'?'modeFirst':'modeMap').classList.add('active');
-  if(mode==='map'){toast('Click anywhere on the map to set the visit start point.');}
+  document.getElementById('modeLocation').classList.toggle('active', mode==='location');
+  document.getElementById('modeMap').classList.toggle('active', mode==='map');
+
+  if(mode==='map'){
+    els.startStatus.innerHTML='Click anywhere on the map to select the <b>Visit Start</b>.';
+    els.mapStatus.textContent='Select visit start on the map';
+    els.mapSub.textContent='Click the map where your field visit will begin.';
+    map.getContainer().style.cursor='crosshair';
+  }else{
+    els.startStatus.innerHTML='Click <b>Current Location</b> to request your device location.';
+    els.mapStatus.textContent='Current Location selected';
+    els.mapSub.textContent='Your browser will ask for location permission.';
+    map.getContainer().style.cursor='';
+  }
 }
+
 function locateUser(){
   if(!navigator.geolocation){toast('Geolocation is not supported by this browser.');return;}
+  els.startStatus.innerHTML='Requesting your current location…';
   navigator.geolocation.getCurrentPosition(pos=>{
     userLocation=[pos.coords.latitude,pos.coords.longitude];
-    startMode='location';setMode('location');
+    mapStart=null;
+    startMode='location';
+    setMode('location');
+
     if(startMarker)map.removeLayer(startMarker);
-    startMarker=L.marker(userLocation,{icon:markerIcon(null,null,true)}).addTo(map).bindPopup('<b>Visit Start</b><br>Current location');
+    startMarker=L.marker(userLocation,{icon:markerIcon(null,null,true)})
+      .addTo(map)
+      .bindPopup('<b>Visit Start</b><br>Current device location')
+      .openPopup();
+
+    els.startStatus.innerHTML=`Current location selected: <b>${userLocation[0].toFixed(5)}, ${userLocation[1].toFixed(5)}</b>`;
+    els.mapStatus.textContent='Current location selected';
+    els.mapSub.textContent='Your route will start from your current device location.';
     map.setView(userLocation,14);
-    toast('Current location set as visit start.');
-  },()=>toast('Could not access your location. Please allow location access.'));
+    toast('Current location selected.');
+  },err=>{
+    let msg='Could not access your current location.';
+    if(err && err.code===1)msg='Location permission was denied. Allow location access or select a point on the map.';
+    if(err && err.code===2)msg='Your current location could not be determined. Select a point on the map instead.';
+    if(err && err.code===3)msg='Location request timed out. Select a point on the map instead.';
+    els.startStatus.innerHTML=msg;
+    toast(msg);
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:30000});
 }
+
+function clearStart(){
+  userLocation=null;
+  mapStart=null;
+  if(startMarker){map.removeLayer(startMarker);startMarker=null;}
+  startMode='map';
+  document.getElementById('modeLocation').classList.remove('active');
+  document.getElementById('modeMap').classList.add('active');
+  els.startStatus.innerHTML='Click anywhere on the map to select the <b>Visit Start</b>.';
+  els.mapStatus.textContent='Select visit start on the map';
+  els.mapSub.textContent='Click the map where your field visit will begin.';
+  map.getContainer().style.cursor='crosshair';
+  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
+  els.routeBadge.classList.remove('show');
+  toast('Visit Start cleared.');
+}
+
 function setMapStart(e){
   if(startMode!=='map')return;
   mapStart=[e.latlng.lat,e.latlng.lng];
+  userLocation=null;
+
   if(startMarker)map.removeLayer(startMarker);
-  startMarker=L.marker(mapStart,{icon:markerIcon(null,null,true)}).addTo(map).bindPopup('<b>Visit Start</b><br>Custom map point').openPopup();
-  toast('Custom visit start set.');
+  startMarker=L.marker(mapStart,{icon:markerIcon(null,null,true)})
+    .addTo(map)
+    .bindPopup('<b>Visit Start</b><br>Selected map point')
+    .openPopup();
+
+  els.startStatus.innerHTML='<b>✓ Visit Start selected.</b> Click the map again to move it, or Clear Start to remove it.';
+  els.mapStatus.textContent='Visit start selected';
+  els.mapSub.textContent=`${mapStart[0].toFixed(5)}, ${mapStart[1].toFixed(5)}`;
+  map.getContainer().style.cursor='';
+  toast('Visit Start selected on the map.');
 }
+
+function googlePoint(c){
+  return `${c[0]},${c[1]}`;
+}
+
+function openGoogleDirections(){
+  let start=null;
+
+  if(startMode==='location'){
+    if(!userLocation){
+      toast('Please select Current Location first.');
+      return;
+    }
+    start=userLocation;
+  }else{
+    if(!mapStart){
+      toast('Please select Visit Start on the map first.');
+      return;
+    }
+    start=mapStart;
+  }
+
+  const stops=planned.filter(f=>coords(f));
+  if(!stops.length){
+    toast('Add at least one facility to the Visit Plan.');
+    return;
+  }
+
+  /*
+    Google Maps URLs preserve the exact order supplied.
+    origin = selected start
+    destination = final planned facility
+    waypoints = facilities between them
+  */
+  const origin=googlePoint(start);
+  const destination=googlePoint(coords(stops[stops.length-1]));
+  const middle=stops.slice(0,-1);
+
+  /*
+    Google Maps URLs support up to 9 waypoints on desktop/web,
+    and up to 3 waypoints on mobile browsers. For the common
+    5-stop plan, desktop Google Maps can open the full sequence.
+    If the mobile platform cannot accept all waypoints, Google
+    Maps may open a reduced/partial route.
+  */
+  const waypoints=middle.map(f=>googlePoint(coords(f)));
+
+  const params=new URLSearchParams({
+    api:'1',
+    origin,
+    destination,
+    travelmode:'driving'
+  });
+
+  if(waypoints.length) params.set('waypoints',waypoints.join('|'));
+
+  const url=`https://www.google.com/maps/dir/?${params.toString()}`;
+  window.open(url,'_blank','noopener');
+}
+
 async function route(){
   if(planned.length===0){toast('Add at least one facility to the visit plan.');return;}
   let start;
   if(startMode==='location'){
-    if(!userLocation){toast('Getting your current location…');locateUser();return;}
+    if(!userLocation){toast('Set your current location first.');locateUser();return;}
     start=userLocation;
   } else if(startMode==='map'){
-    if(!mapStart){toast('Click the map to set the visit start point.');return;}
+    if(!mapStart){toast('Select your visit start point on the map first.');return;}
     start=mapStart;
-  } else {
-    const c=coords(planned[0]); if(!c){toast('First stop has no coordinates.');return;}
-    start=c;
   }
   const stops=planned.map(coords).filter(Boolean);
   const all=[start,...stops];
@@ -529,45 +787,152 @@ function drawRoute(route){
   routeLayer=L.geoJSON(route.geometry,{style:{color:'#0b5d5e',weight:6,opacity:.82}}).addTo(map);
 }
 async function optimize(){
-  if(planned.length<2){toast('Add at least two facilities to optimize the visit order.');return;}
+  if(planned.length<2){
+    toast('Add at least two facilities to optimize the visit order.');
+    return;
+  }
+
   let start=null;
   if(startMode==='location'){
-    if(!userLocation){toast('Set your current location first.');locateUser();return;}
+    if(!userLocation){
+      toast('Please select Current Location first.');
+      return;
+    }
     start=userLocation;
-  } else if(startMode==='map'){
-    if(!mapStart){toast('Set the map start point first.');return;}
+  }else{
+    if(!mapStart){
+      toast('Please click on the map to select the Visit Start.');
+      return;
+    }
     start=mapStart;
-  } else {
-    start=coords(planned[0]);
   }
-  const stops=planned.map(coords).filter(Boolean);
-  const all=[start,...stops];
-  const coordsStr=all.map(c=>`${c[1]},${c[0]}`).join(';');
-  const url=`https://router.project-osrm.org/trip/v1/driving/${coordsStr}?roundtrip=false&source=first&destination=last&overview=false`;
+
+  const stops=planned.filter(f=>coords(f));
+  if(stops.length<2){
+    toast('At least two planned facilities need valid coordinates.');
+    return;
+  }
+
+  const points=[start,...stops.map(coords)];
+  const coordString=points.map(c=>`${c[1]},${c[0]}`).join(';');
+
   els.loading.classList.add('show');
+  toast('Optimizing using actual road distances…');
+
   try{
-    const r=await fetch(url);const j=await r.json();
-    if(!j.waypoints)throw new Error('No optimization');
-    const order=j.waypoints.slice(1).sort((a,b)=>a.waypoint_index-b.waypoint_index).map(w=>w.trips_index);
-    // OSRM waypoint indices are not a stable stop id; use nearest coordinate matching instead.
-    const remaining=[...planned], reordered=[];
-    (j.trips?.[0]?.legs || []).forEach(()=>{});
-    // Use the returned waypoint order to map coordinates back to facilities.
-    const orderedWaypoints=j.waypoints.slice(1).sort((a,b)=>a.trips_index-b.trips_index);
-    orderedWaypoints.forEach(w=>{
-      let best=-1,bd=Infinity;
-      remaining.forEach((f,i)=>{
-        const c=coords(f); const dx=c[1]-w.location[0],dy=c[0]-w.location[1],d=dx*dx+dy*dy;
-        if(d<bd){bd=d;best=i;}
-      });
-      if(best>=0)reordered.push(remaining.splice(best,1)[0]);
-    });
-    planned=reordered.concat(remaining);
-    renderPlan();renderFacilities();refreshMarkerIcons();
-    toast('Visit order optimized.');
+    // OSRM Table = driving-distance matrix between every point.
+    const tableURL=
+      `https://router.project-osrm.org/table/v1/driving/${coordString}`+
+      `?annotations=distance,duration`;
+
+    const response=await fetch(tableURL);
+    if(!response.ok) throw new Error('Road distance service unavailable');
+
+    const data=await response.json();
+    if(!data.distances) throw new Error('No road distance matrix returned');
+
+    const matrix=data.distances;
+    const n=stops.length;
+
+    // Route indices 0..n refer to points[]; 0 is the selected start.
+    // Greedy nearest-neighbour initial route.
+    function routeDistance(order){
+      let total=0;
+      let previous=0;
+      for(const idx of order){
+        const d=matrix[previous][idx];
+        if(!Number.isFinite(d)) return Infinity;
+        total+=d;
+        previous=idx;
+      }
+      return total;
+    }
+
+    let order=[];
+    const unvisited=new Set();
+    for(let i=1;i<=n;i++) unvisited.add(i);
+
+    let current=0;
+    while(unvisited.size){
+      let best=null;
+      let bestDist=Infinity;
+
+      for(const candidate of unvisited){
+        const d=matrix[current][candidate];
+        if(Number.isFinite(d) && d<bestDist){
+          bestDist=d;
+          best=candidate;
+        }
+      }
+
+      if(best===null){
+        best=unvisited.values().next().value;
+      }
+
+      order.push(best);
+      unvisited.delete(best);
+      current=best;
+    }
+
+    // 2-opt improvement using actual road distances.
+    // Keep the selected Visit Start fixed at the beginning.
+    let improved=true;
+    let iterations=0;
+    const maxIterations=100;
+
+    while(improved && iterations<maxIterations){
+      improved=false;
+      iterations++;
+
+      for(let i=0;i<order.length-1;i++){
+        for(let k=i+1;k<order.length;k++){
+          const before = i===0 ? 0 : order[i-1];
+          const a=order[i];
+          const b=order[k];
+          const after = k===order.length-1 ? null : order[k+1];
+
+          const old1=matrix[before][a];
+          const old2=after===null ? 0 : matrix[b][after];
+
+          const new1=matrix[before][b];
+          const new2=after===null ? 0 : matrix[a][after];
+
+          if(
+            Number.isFinite(old1) &&
+            Number.isFinite(old2) &&
+            Number.isFinite(new1) &&
+            Number.isFinite(new2) &&
+            (new1+new2+0.01)<(old1+old2)
+          ){
+            const reversed=order.slice(i,k+1).reverse();
+            order.splice(i,k-i+1,...reversed);
+            improved=true;
+          }
+        }
+      }
+    }
+
+    // Convert optimized indices back to facility objects.
+    planned=order.map(idx=>stops[idx-1]);
+
+    renderPlan();
+    renderFacilities();
+    refreshMarkerIcons();
+
+    const optimizedMeters=routeDistance(order);
+    const km=(optimizedMeters/1000).toFixed(1);
+
+    toast(`Optimized road route: ${km} km`);
+
+    // Rebuild the visible Leaflet route using the optimized order.
     await route();
-  }catch(e){toast('Could not optimize the visit order right now.');}
-  finally{els.loading.classList.remove('show');}
+
+  }catch(err){
+    console.warn('Road optimization failed:',err);
+    toast('Road optimization is temporarily unavailable. Keeping the current order.');
+  }finally{
+    els.loading.classList.remove('show');
+  }
 }
 function formatMinutes(m){
   if(m<60)return `${m} min`;
@@ -588,15 +953,29 @@ function exportCSV(){
 
 // UI events
 els.search.addEventListener('input',applyFilters);
-els.district.addEventListener('change',()=>{populateTehsils();applyFilters();});
+
 els.tehsil.addEventListener('change',applyFilters);
 
+document.getElementById('districtBtn').onclick=(e)=>{
+  e.stopPropagation();
+  document.getElementById('districtPicker').classList.toggle('open');
+};
+
+document.getElementById('districtMenu').onclick=e=>e.stopPropagation();
+
+document.addEventListener('click',()=>{
+  document.getElementById('districtPicker').classList.remove('open');
+});
+
 document.getElementById('sidebarBtn').onclick=()=>els.sidebar.classList.toggle('open');
-document.getElementById('locBtn').onclick=locateUser;
-document.getElementById('modeLocation').onclick=()=>setMode('location');
-document.getElementById('modeFirst').onclick=()=>setMode('first');
+document.getElementById('modeLocation').onclick=()=>{
+  setMode('location');
+  locateUser();
+};
 document.getElementById('modeMap').onclick=()=>setMode('map');
+document.getElementById('clearStartBtn').onclick=clearStart;
 document.getElementById('routeBtn').onclick=route;
+document.getElementById('googleBtn').onclick=openGoogleDirections;
 document.getElementById('optBtn').onclick=optimize;
 document.getElementById('clearBtn').onclick=()=>{
   planned=[];if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
@@ -610,7 +989,9 @@ document.getElementById('zoomIn').onclick=()=>map.zoomIn();
 document.getElementById('zoomOut').onclick=()=>map.zoomOut();
 map.on('click',setMapStart);
 
-populateDistricts();populateTehsils();renderFacilities();rebuildMarkers();fitFacilities();
+populateDistricts();populateTehsils();applyFilters();fitFacilities();
+els.mapStatus.textContent='Select a visit starting point';
+els.mapSub.textContent='Choose Current Location or Select on Map.';
 if(window.innerWidth<=850)els.sidebar.classList.remove('open');
 </script>
 </body>
